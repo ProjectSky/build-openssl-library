@@ -1,0 +1,112 @@
+name: Build OpenSSL
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Setup NASM
+      uses: ilammy/setup-nasm@v1
+
+    - name: Cache OpenSSL source
+      uses: actions/cache@v4
+      with:
+        path: openssl-source
+        key: ${{ runner.os }}-openssl-source
+
+    - name: Download OpenSSL
+      if: steps.cache-openssl-source.outputs.cache-hit != 'true'
+      run: |
+        Invoke-WebRequest -Uri "https://www.openssl.org/source/openssl-3.0.14.tar.gz" -OutFile "openssl-3.0.14.tar.gz"
+        tar -xzf openssl-3.0.14.tar.gz
+        Move-Item openssl-3.0.14 openssl-source
+
+    - name: Build openssl static library (32-bit)
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x86
+
+    - run: |
+        cd openssl-source
+        perl Configure VC-WIN32 no-shared no-tests --prefix=C:\openssl-win32-mt --release
+        nmake
+        nmake install_sw
+
+    - name: Build openssl static library (64-bit)
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x64
+
+    - run: |
+        cd openssl-source
+        nmake clean
+        perl Configure VC-WIN64A no-shared no-tests --prefix=C:\openssl-win64-mt --release
+        nmake
+        nmake install_sw
+
+    - name: Archive 32-bit artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: openssl-x86-mt
+        path: C:\openssl-win32-mt
+
+    - name: Archive 64-bit artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: openssl-x64-mt
+        path: C:\openssl-win64-mt
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Setup build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential checkinstall zlib1g-dev
+    - name: Setup 32-bit build environment
+      run: sudo apt-get install -y gcc-multilib g++-multilib
+    - name: Setup Perl
+      uses: shogo82148/actions-setup-perl@v1
+      with:
+        perl-version: '5.32'
+    - name: Cache OpenSSL source
+      uses: actions/cache@v4
+      with:
+        path: openssl-source
+        key: ${{ runner.os }}-openssl-source
+    - name: Download OpenSSL
+      if: steps.cache-openssl-source.outputs.cache-hit != 'true'
+      run: |
+        wget https://www.openssl.org/source/openssl-3.0.14.tar.gz
+        tar -xzf openssl-3.0.14.tar.gz
+        mv openssl-3.0.14 openssl-source
+    - name: Build openssl static library (64-bit)
+      run: |
+        cd openssl-source
+        ./config no-shared no-tests --prefix=/usr/local/openssl-linux64-mt --release
+        make
+        sudo make install_sw
+    - name: Build openssl static library (32-bit)
+      run: |
+        cd openssl-source
+        make clean
+        setarch i386 ./config -m32 no-shared no-tests --prefix=/usr/local/openssl-linux32-mt --release
+        make
+        sudo make install_sw
+    - name: Archive 64-bit artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: openssl-linux-x64-mt
+        path: /usr/local/openssl-linux64-mt
+    - name: Archive 32-bit artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: openssl-linux-x86-mt
+        path: /usr/local/openssl-linux32-mt

@@ -58,7 +58,8 @@ jobs:
       if: runner.os == 'Windows'
       run: |
         cd openssl-source
-        perl Configure VC-WIN32 no-shared no-tests --prefix=C:\openssl-win32-mt --release
+        set CFLAGS=/MT /Z7
+        perl Configure VC-WIN32 no-shared no-async no-tests --prefix=C:\openssl-win32-mt --release
         nmake
         nmake install_sw
         mkdir C:\openssl-artifacts\lib
@@ -77,29 +78,30 @@ jobs:
       run: |
         cd openssl-source
         nmake clean
-        perl Configure VC-WIN64A no-shared no-tests --prefix=C:\openssl-win64-mt --release
+        set CFLAGS=/MT /Z7
+        perl Configure VC-WIN64A no-shared no-async no-tests --prefix=C:\openssl-win64-mt --release
         nmake
         nmake install_sw
-        move C:\openssl-win64-mt\lib\libcrypto.lib C:\openssl-artifacts\lib\${{ env.CUSTOM_CRYPTO_NAME }}_x64.lib
-        move C:\openssl-win64-mt\lib\libssl.lib C:\openssl-artifacts\lib\${{ env.CUSTOM_SSL_NAME }}_x64.lib
+        move C:\openssl-win64-mt\lib\libcrypto.lib C:\openssl-artifacts\lib\${{ env.CUSTOM_CRYPTO_NAME }}_x86_64.lib
+        move C:\openssl-win64-mt\lib\libssl.lib C:\openssl-artifacts\lib\${{ env.CUSTOM_SSL_NAME }}_x86_64.lib
     
     - name: Build OpenSSL (Linux 64-bit)
       if: runner.os == 'Linux'
       run: |
         cd openssl-source
-        ./config no-shared no-tests --prefix=/usr/local/openssl-linux64 --release
+        ./config no-shared no-async no-tests --prefix=/usr/local/openssl-linux64 --release
         make
         sudo make install_sw
         sudo mkdir -p /usr/local/openssl-artifacts/lib
-        sudo mv /usr/local/openssl-linux64/lib64/libcrypto.a /usr/local/openssl-artifacts/lib/${{ env.CUSTOM_CRYPTO_NAME }}_x64.a
-        sudo mv /usr/local/openssl-linux64/lib64/libssl.a /usr/local/openssl-artifacts/lib/${{ env.CUSTOM_SSL_NAME }}_x64.a
+        sudo mv /usr/local/openssl-linux64/lib64/libcrypto.a /usr/local/openssl-artifacts/lib/${{ env.CUSTOM_CRYPTO_NAME }}_x86_64.a
+        sudo mv /usr/local/openssl-linux64/lib64/libssl.a /usr/local/openssl-artifacts/lib/${{ env.CUSTOM_SSL_NAME }}_x86_64.a
     
     - name: Build OpenSSL (Linux 32-bit)
       if: runner.os == 'Linux'
       run: |
         cd openssl-source
         make clean
-        setarch i386 ./config -m32 no-shared no-tests --prefix=/usr/local/openssl-linux32 --release
+        setarch i386 ./config -m32 no-shared no-async no-tests --prefix=/usr/local/openssl-linux32 --release
         make
         sudo make install_sw
         sudo mv /usr/local/openssl-linux32/lib/libcrypto.a /usr/local/openssl-artifacts/lib/${{ env.CUSTOM_CRYPTO_NAME }}_x86.a

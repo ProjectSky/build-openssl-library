@@ -58,8 +58,7 @@ jobs:
       if: runner.os == 'Windows'
       run: |
         cd openssl-source
-        set CFLAGS=/MT /Z7
-        perl Configure VC-WIN32 no-shared no-async no-tests --prefix=C:\openssl-win32-mt --release
+        perl Configure VC-WIN32 no-shared no-tests --prefix=C:\openssl-win32-mt --release CFLAGS=/Z7
         nmake
         nmake install_sw
         mkdir C:\openssl-artifacts\lib
@@ -78,8 +77,7 @@ jobs:
       run: |
         cd openssl-source
         nmake clean
-        set CFLAGS=/MT /Z7
-        perl Configure VC-WIN64A no-shared no-async no-tests --prefix=C:\openssl-win64-mt --release
+        perl Configure VC-WIN64A no-shared no-tests --prefix=C:\openssl-win64-mt --release CFLAGS=/Z7
         nmake
         nmake install_sw
         move C:\openssl-win64-mt\lib\libcrypto.lib C:\openssl-artifacts\lib\${{ env.CUSTOM_CRYPTO_NAME }}_x86_64.lib

@@ -1,0 +1,120 @@
+name: Build OpenSSL
+
+on:
+  push:
+    paths:
+      - pushbuild.txt
+  pull_request:
+    paths:
+      - pushbuild.txt
+
+env:
+  OPENSSL_VERSION: 3.0.14
+  CUSTOM_CRYPTO_NAME: libcrypto_static
+  CUSTOM_SSL_NAME: libssl_static
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup NASM
+      uses: ilammy/setup-nasm@v1
+    
+    - name: Setup Linux dependencies
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential checkinstall zlib1g-dev gcc-multilib g++-multilib
+    
+    - name: Download OpenSSL (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        Invoke-WebRequest -Uri "https://www.openssl.org/source/openssl-${{ env.OPENSSL_VERSION }}.tar.gz" -OutFile "openssl-${{ env.OPENSSL_VERSION }}.tar.gz"
+        tar -xzf openssl-${{ env.OPENSSL_VERSION }}.tar.gz
+        Move-Item openssl-${{ env.OPENSSL_VERSION }} openssl-source
+    
+    - name: Download OpenSSL (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        wget https://www.openssl.org/source/openssl-${{ env.OPENSSL_VERSION }}.tar.gz
+        tar -xzf openssl-${{ env.OPENSSL_VERSION }}.tar.gz
+        mv openssl-${{ env.OPENSSL_VERSION }} openssl-source
+    
+    - name: Set MSVC (Windows 32-bit)
+      if: runner.os == 'Windows'
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x86
+    
+    - name: Build OpenSSL (Windows 32-bit)
+      if: runner.os == 'Windows'
+      run: |
+        cd openssl-source
+        perl Configure VC-WIN32 no-shared no-tests --prefix=C:\openssl-win32-mt --release
+        nmake
+        nmake install_sw
+        mkdir C:\openssl-artifacts\lib
+        move C:\openssl-win32-mt\lib\libcrypto.lib C:\openssl-artifacts\lib\${{ env.CUSTOM_CRYPTO_NAME }}_x86.lib
+        move C:\openssl-win32-mt\lib\libssl.lib C:\openssl-artifacts\lib\${{ env.CUSTOM_SSL_NAME }}_x86.lib
+        move C:\openssl-win32-mt\include C:\openssl-artifacts\
+    
+    - name: Set MSVC (Windows 64-bit)
+      if: runner.os == 'Windows'
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x64
+    
+    - name: Build OpenSSL (Windows 64-bit)
+      if: runner.os == 'Windows'
+      run: |
+        cd openssl-source
+        nmake clean
+        perl Configure VC-WIN64A no-shared no-tests --prefix=C:\openssl-win64-mt --release
+        nmake
+        nmake install_sw
+        move C:\openssl-win64-mt\lib\libcrypto.lib C:\openssl-artifacts\lib\${{ env.CUSTOM_CRYPTO_NAME }}_x86_64.lib
+        move C:\openssl-win64-mt\lib\libssl.lib C:\openssl-artifacts\lib\${{ env.CUSTOM_SSL_NAME }}_x86_64.lib
+    
+    - name: Build OpenSSL (Linux 64-bit)
+      if: runner.os == 'Linux'
+      run: |
+        cd openssl-source
+        ./config no-shared no-tests --prefix=/usr/local/openssl-linux64 --release
+        make
+        sudo make install_sw
+        sudo mkdir -p /usr/local/openssl-artifacts/lib
+        sudo mv /usr/local/openssl-linux64/lib64/libcrypto.a /usr/local/openssl-artifacts/lib/${{ env.CUSTOM_CRYPTO_NAME }}_x86_64.a
+        sudo mv /usr/local/openssl-linux64/lib64/libssl.a /usr/local/openssl-artifacts/lib/${{ env.CUSTOM_SSL_NAME }}_x86_64.a
+    
+    - name: Build OpenSSL (Linux 32-bit)
+      if: runner.os == 'Linux'
+      run: |
+        cd openssl-source
+        make clean
+        setarch i386 ./config -m32 no-shared no-tests --prefix=/usr/local/openssl-linux32 --release
+        make
+        sudo make install_sw
+        sudo mv /usr/local/openssl-linux32/lib/libcrypto.a /usr/local/openssl-artifacts/lib/${{ env.CUSTOM_CRYPTO_NAME }}_x86.a
+        sudo mv /usr/local/openssl-linux32/lib/libssl.a /usr/local/openssl-artifacts/lib/${{ env.CUSTOM_SSL_NAME }}_x86.a
+        sudo mv /usr/local/openssl-linux32/include /usr/local/openssl-artifacts/
+    
+    - name: Archive Windows artifacts
+      if: runner.os == 'Windows'
+      uses: actions/upload-artifact@v4
+      with:
+        name: openssl-windows-static-${{ env.OPENSSL_VERSION }}
+        path: C:\openssl-artifacts
+    
+    - name: Archive Linux artifacts
+      if: runner.os == 'Linux'
+      uses: actions/upload-artifact@v4
+      with:
+        name: openssl-linux-static-${{ env.OPENSSL_VERSION }}
+        path: /usr/local/openssl-artifacts

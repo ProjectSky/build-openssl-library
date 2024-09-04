@@ -57,7 +57,7 @@ jobs:
       if: runner.os == 'Windows'
       run: |
         cd openssl-source
-        perl Configure VC-WIN32 no-shared no-tests --prefix=C:\openssl-win32-mt --release
+        perl Configure VC-WIN32 no-shared no-tests --prefix=C:\openssl-win32-mt
         nmake
         nmake install_sw
         mkdir C:\openssl-artifacts\lib
@@ -76,7 +76,7 @@ jobs:
       run: |
         cd openssl-source
         nmake clean
-        perl Configure VC-WIN64A no-shared no-tests --prefix=C:\openssl-win64-mt --release
+        perl Configure VC-WIN64A no-shared no-tests --prefix=C:\openssl-win64-mt
         nmake
         nmake install_sw
         move C:\openssl-win64-mt\lib\libcrypto.lib C:\openssl-artifacts\lib\${{ env.CUSTOM_CRYPTO_NAME }}_x86_64.lib
@@ -86,7 +86,7 @@ jobs:
       if: runner.os == 'Linux'
       run: |
         cd openssl-source
-        ./config no-shared no-tests --prefix=/usr/local/openssl-linux64 --release
+        ./config no-shared no-tests --prefix=/usr/local/openssl-linux64
         make
         sudo make install_sw
         sudo mkdir -p /usr/local/openssl-artifacts/lib
@@ -98,7 +98,7 @@ jobs:
       run: |
         cd openssl-source
         make clean
-        setarch i386 ./config -m32 no-shared no-tests --prefix=/usr/local/openssl-linux32 --release
+        setarch i386 ./config -m32 no-shared no-tests --prefix=/usr/local/openssl-linux32
         make
         sudo make install_sw
         sudo mv /usr/local/openssl-linux32/lib/libcrypto.a /usr/local/openssl-artifacts/lib/${{ env.CUSTOM_CRYPTO_NAME }}_x86.a

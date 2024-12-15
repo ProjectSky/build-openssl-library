@@ -1,0 +1,162 @@
+name: Build OpenSSL
+
+on:
+  push:
+    paths:
+      - pushbuild.txt
+  pull_request:
+    paths:
+      - pushbuild.txt
+
+env:
+  OPENSSL_VERSION: 3.4.0
+  CUSTOM_CRYPTO_NAME: libcrypto_static
+  CUSTOM_SSL_NAME: libssl_static
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        include:
+          - os: windows-latest
+            install_path: C:\openssl-artifacts
+          - os: ubuntu-latest
+            install_path: /usr/local/openssl-artifacts
+    
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup NASM
+      uses: ilammy/setup-nasm@v1
+    
+    - name: Setup Linux dependencies
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential checkinstall zlib1g-dev gcc-multilib g++-multilib
+
+    - name: Download OpenSSL
+      shell: bash
+      run: |
+        curl -L "https://www.openssl.org/source/openssl-${{ env.OPENSSL_VERSION }}.tar.gz" -o openssl.tar.gz
+        tar -xzf openssl.tar.gz
+        mv openssl-${{ env.OPENSSL_VERSION }} openssl-source
+
+    - name: Configure OpenSSL (Windows 32-bit)
+      if: runner.os == 'Windows'
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x86
+        
+    - name: Build OpenSSL (Windows 32-bit)
+      if: runner.os == 'Windows'
+      shell: cmd
+      run: |
+        cd openssl-source
+        perl Configure VC-WIN32 --prefix=C:\openssl-win32-mt no-shared no-apps no-docs no-tests no-tls1 no-tls1_1
+        nmake
+        nmake install_sw
+        mkdir C:\openssl-artifacts\lib
+        move C:\openssl-win32-mt\lib\libcrypto.lib C:\openssl-artifacts\lib\${{ env.CUSTOM_CRYPTO_NAME }}_x86.lib
+        move C:\openssl-win32-mt\lib\libssl.lib C:\openssl-artifacts\lib\${{ env.CUSTOM_SSL_NAME }}_x86.lib
+        move C:\openssl-win32-mt\include C:\openssl-artifacts\
+
+    - name: Configure OpenSSL (Windows 64-bit)
+      if: runner.os == 'Windows'
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x64
+        
+    - name: Build OpenSSL (Windows 64-bit)
+      if: runner.os == 'Windows'
+      shell: cmd
+      run: |
+        cd openssl-source
+        nmake clean
+        perl Configure VC-WIN64A --prefix=C:\openssl-win64-mt no-shared no-apps no-docs no-tests no-tls1 no-tls1_1
+        nmake
+        nmake install_sw
+        move C:\openssl-win64-mt\lib\libcrypto.lib C:\openssl-artifacts\lib\${{ env.CUSTOM_CRYPTO_NAME }}_x86_64.lib
+        move C:\openssl-win64-mt\lib\libssl.lib C:\openssl-artifacts\lib\${{ env.CUSTOM_SSL_NAME }}_x86_64.lib
+
+    - name: Build OpenSSL (Linux 64-bit)
+      if: runner.os == 'Linux'
+      run: |
+        cd openssl-source
+        ./config --prefix=/usr/local/openssl-linux64 no-shared no-apps no-docs no-tests no-tls1 no-tls1_1
+        make
+        sudo make install_sw
+        sudo mkdir -p /usr/local/openssl-artifacts/lib
+        sudo mv /usr/local/openssl-linux64/lib64/libcrypto.a /usr/local/openssl-artifacts/lib/${{ env.CUSTOM_CRYPTO_NAME }}_x86_64.a
+        sudo mv /usr/local/openssl-linux64/lib64/libssl.a /usr/local/openssl-artifacts/lib/${{ env.CUSTOM_SSL_NAME }}_x86_64.a
+
+    - name: Build OpenSSL (Linux 32-bit)
+      if: runner.os == 'Linux'
+      run: |
+        cd openssl-source
+        make clean
+        setarch i386 ./config --prefix=/usr/local/openssl-linux32 no-shared no-apps no-docs no-tests no-tls1 no-tls1_1
+        make
+        sudo make install_sw
+        sudo mv /usr/local/openssl-linux32/lib/libcrypto.a /usr/local/openssl-artifacts/lib/${{ env.CUSTOM_CRYPTO_NAME }}_x86.a
+        sudo mv /usr/local/openssl-linux32/lib/libssl.a /usr/local/openssl-artifacts/lib/${{ env.CUSTOM_SSL_NAME }}_x86.a
+        sudo mv /usr/local/openssl-linux32/include /usr/local/openssl-artifacts/
+
+    - name: Archive artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: openssl-${{ runner.os }}-static-${{ env.OPENSSL_VERSION }}
+        path: ${{ matrix.install_path }}
+
+  create-release-note:
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: Create Release Archive
+      run: |
+        cd artifacts
+        7z a ../openssl-Linux-static-${{ env.OPENSSL_VERSION }}.zip ./openssl-Linux-static-${{ env.OPENSSL_VERSION }}/*
+        7z a ../openssl-Windows-static-${{ env.OPENSSL_VERSION }}.zip ./openssl-Windows-static-${{ env.OPENSSL_VERSION }}/*
+
+    - name: Create-Release
+      run: |
+        echo "# OpenSSL Static Libraries Release" > RELEASE_NOTE.md
+        echo "## Version: ${{ env.OPENSSL_VERSION }}" >> RELEASE_NOTE.md
+        echo "### Build Information" >> RELEASE_NOTE.md
+        echo "- OpenSSL Version: ${{ env.OPENSSL_VERSION }}" >> RELEASE_NOTE.md
+        echo "- Build Date: $(date +'%Y-%m-%d')" >> RELEASE_NOTE.md
+        echo "- Build Args: no-shared no-apps no-docs no-tests no-tls1 no-tls1_1" >> RELEASE_NOTE.md
+        echo "### Contents" >> RELEASE_NOTE.md
+        echo "#### Windows" >> RELEASE_NOTE.md
+        echo "- ${CUSTOM_CRYPTO_NAME}_x86.lib" >> RELEASE_NOTE.md
+        echo "- ${CUSTOM_CRYPTO_NAME}_x86_64.lib" >> RELEASE_NOTE.md
+        echo "- ${CUSTOM_SSL_NAME}_x86.lib" >> RELEASE_NOTE.md
+        echo "- ${CUSTOM_SSL_NAME}_x86_64.lib" >> RELEASE_NOTE.md
+        echo "#### Linux" >> RELEASE_NOTE.md
+        echo "- ${CUSTOM_CRYPTO_NAME}_x86.a" >> RELEASE_NOTE.md
+        echo "- ${CUSTOM_CRYPTO_NAME}_x86_64.a" >> RELEASE_NOTE.md
+        echo "- ${CUSTOM_SSL_NAME}_x86.a" >> RELEASE_NOTE.md
+        echo "- ${CUSTOM_SSL_NAME}_x86_64.a" >> RELEASE_NOTE.md
+
+    - name: Update Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: openssl-${{ env.OPENSSL_VERSION }}
+        body_path: RELEASE_NOTE.md
+        files: |
+          openssl-Linux-static-${{ env.OPENSSL_VERSION }}.zip
+          openssl-Windows-static-${{ env.OPENSSL_VERSION }}.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

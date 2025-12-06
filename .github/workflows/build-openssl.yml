@@ -35,6 +35,10 @@ jobs:
     - name: Setup NASM
       uses: ilammy/setup-nasm@v1
     
+    - name: Install jom
+      if: runner.os == 'Windows'
+      run: choco install jom -y
+    
     - name: Setup Linux dependencies
       if: runner.os == 'Linux'
       run: |
@@ -59,9 +63,9 @@ jobs:
       shell: cmd
       run: |
         cd openssl-source
-        perl Configure VC-WIN32 --prefix=C:\openssl-win32-mt no-shared no-apps no-docs no-tests no-tls1 no-tls1_1
-        nmake
-        nmake install_sw
+        perl Configure VC-WIN32 --prefix=C:\openssl-win32-mt --release no-shared no-apps no-docs no-tests no-tls1 no-tls1_1 /FS
+        jom -j%NUMBER_OF_PROCESSORS%
+        jom install_sw
         mkdir C:\openssl-artifacts\lib
         move C:\openssl-win32-mt\lib\libcrypto.lib C:\openssl-artifacts\lib\${{ env.CUSTOM_CRYPTO_NAME }}_x86.lib
         move C:\openssl-win32-mt\lib\libssl.lib C:\openssl-artifacts\lib\${{ env.CUSTOM_SSL_NAME }}_x86.lib
@@ -78,10 +82,10 @@ jobs:
       shell: cmd
       run: |
         cd openssl-source
-        nmake clean
-        perl Configure VC-WIN64A --prefix=C:\openssl-win64-mt no-shared no-apps no-docs no-tests no-tls1 no-tls1_1
-        nmake
-        nmake install_sw
+        jom clean
+        perl Configure VC-WIN64A --prefix=C:\openssl-win64-mt --release no-shared no-apps no-docs no-tests no-tls1 no-tls1_1 /FS
+        jom -j%NUMBER_OF_PROCESSORS%
+        jom install_sw
         move C:\openssl-win64-mt\lib\libcrypto.lib C:\openssl-artifacts\lib\${{ env.CUSTOM_CRYPTO_NAME }}_x86_64.lib
         move C:\openssl-win64-mt\lib\libssl.lib C:\openssl-artifacts\lib\${{ env.CUSTOM_SSL_NAME }}_x86_64.lib
 
@@ -89,8 +93,8 @@ jobs:
       if: runner.os == 'Linux'
       run: |
         cd openssl-source
-        ./config --prefix=/usr/local/openssl-linux64 no-shared no-apps no-docs no-tests no-tls1 no-tls1_1
-        make
+        ./config --prefix=/usr/local/openssl-linux64 --release no-shared no-apps no-docs no-tests no-tls1 no-tls1_1
+        make -j$(nproc)
         sudo make install_sw
         sudo mkdir -p /usr/local/openssl-artifacts/lib
         sudo mv /usr/local/openssl-linux64/lib64/libcrypto.a /usr/local/openssl-artifacts/lib/${{ env.CUSTOM_CRYPTO_NAME }}_x86_64.a
@@ -101,8 +105,8 @@ jobs:
       run: |
         cd openssl-source
         make clean
-        setarch i386 ./config --prefix=/usr/local/openssl-linux32 no-shared no-apps no-docs no-tests no-tls1 no-tls1_1
-        make
+        setarch i386 ./config --prefix=/usr/local/openssl-linux32 --release no-shared no-apps no-docs no-tests no-tls1 no-tls1_1
+        make -j$(nproc)
         sudo make install_sw
         sudo mv /usr/local/openssl-linux32/lib/libcrypto.a /usr/local/openssl-artifacts/lib/${{ env.CUSTOM_CRYPTO_NAME }}_x86.a
         sudo mv /usr/local/openssl-linux32/lib/libssl.a /usr/local/openssl-artifacts/lib/${{ env.CUSTOM_SSL_NAME }}_x86.a
@@ -137,7 +141,7 @@ jobs:
         echo "### Build Information" >> RELEASE_NOTE.md
         echo "- OpenSSL Version: ${{ env.OPENSSL_VERSION }}" >> RELEASE_NOTE.md
         echo "- Build Date: $(date +'%Y-%m-%d')" >> RELEASE_NOTE.md
-        echo "- Build Args: no-shared no-apps no-docs no-tests no-tls1 no-tls1_1" >> RELEASE_NOTE.md
+        echo "- Build Args: --release no-shared no-apps no-docs no-tests no-tls1 no-tls1_1" >> RELEASE_NOTE.md
         echo "### Contents" >> RELEASE_NOTE.md
         echo "#### Windows" >> RELEASE_NOTE.md
         echo "- ${CUSTOM_CRYPTO_NAME}_x86.lib" >> RELEASE_NOTE.md
@@ -153,7 +157,8 @@ jobs:
     - name: Update Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: openssl-${{ env.OPENSSL_VERSION }}
+        tag_name: openssl-${{ env.OPENSSL_VERSION }}-${{ github.run_number }}
+        name: OpenSSL ${{ env.OPENSSL_VERSION }} (Build ${{ github.run_number }})
         body_path: RELEASE_NOTE.md
         files: |
           openssl-Linux-static-${{ env.OPENSSL_VERSION }}.zip

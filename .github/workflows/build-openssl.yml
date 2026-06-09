@@ -9,7 +9,7 @@ on:
       - pushbuild.txt
 
 env:
-  OPENSSL_VERSION: 3.4.0
+  OPENSSL_VERSION: 4.0.1
   CUSTOM_CRYPTO_NAME: libcrypto_static
   CUSTOM_SSL_NAME: libssl_static
 

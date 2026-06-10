@@ -68,7 +68,7 @@ jobs:
       shell: cmd
       run: |
         cd openssl-source
-        perl Configure VC-WIN32 --prefix=C:\openssl-win32-mt --release no-shared no-apps no-docs no-tests no-tls1 no-tls1_1 /FS
+        perl Configure VC-WIN32 --prefix=C:\openssl-win32-mt --release no-shared no-apps no-docs no-tests no-makedepend no-tls1 no-tls1_1 /FS
         jom -j%NUMBER_OF_PROCESSORS%
         jom install_sw
         mkdir C:\openssl-artifacts\lib
@@ -88,7 +88,7 @@ jobs:
       run: |
         cd openssl-source
         jom clean
-        perl Configure VC-WIN64A --prefix=C:\openssl-win64-mt --release no-shared no-apps no-docs no-tests no-tls1 no-tls1_1 /FS
+        perl Configure VC-WIN64A --prefix=C:\openssl-win64-mt --release no-shared no-apps no-docs no-tests no-makedepend no-tls1 no-tls1_1 /FS
         jom -j%NUMBER_OF_PROCESSORS%
         jom install_sw
         move C:\openssl-win64-mt\lib\libcrypto.lib C:\openssl-artifacts\lib\${{ env.CUSTOM_CRYPTO_NAME }}_x86_64.lib

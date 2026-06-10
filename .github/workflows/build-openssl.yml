@@ -20,17 +20,22 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [windows-latest, ubuntu-latest]
+        os: [windows-latest, ubuntu-22.04, ubuntu-latest]
         include:
           - os: windows-latest
             install_path: C:\openssl-artifacts
+            artifact_platform: Windows
+          - os: ubuntu-22.04
+            install_path: /usr/local/openssl-artifacts
+            artifact_platform: Ubuntu-22.04
           - os: ubuntu-latest
             install_path: /usr/local/openssl-artifacts
+            artifact_platform: Ubuntu-latest
     
     runs-on: ${{ matrix.os }}
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     
     - name: Setup NASM
       uses: ilammy/setup-nasm@v1
@@ -113,9 +118,9 @@ jobs:
         sudo mv /usr/local/openssl-linux32/include /usr/local/openssl-artifacts/
 
     - name: Archive artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
-        name: openssl-${{ runner.os }}-static-${{ env.OPENSSL_VERSION }}
+        name: openssl-${{ matrix.artifact_platform }}-static-${{ env.OPENSSL_VERSION }}
         path: ${{ matrix.install_path }}
 
   create-release-note:
@@ -124,14 +129,15 @@ jobs:
     
     steps:
     - name: Download all artifacts
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v8
       with:
         path: artifacts
 
     - name: Create Release Archive
       run: |
         cd artifacts
-        7z a ../openssl-Linux-static-${{ env.OPENSSL_VERSION }}.zip ./openssl-Linux-static-${{ env.OPENSSL_VERSION }}/*
+        7z a ../openssl-Ubuntu-22.04-static-${{ env.OPENSSL_VERSION }}.zip ./openssl-Ubuntu-22.04-static-${{ env.OPENSSL_VERSION }}/*
+        7z a ../openssl-Ubuntu-latest-static-${{ env.OPENSSL_VERSION }}.zip ./openssl-Ubuntu-latest-static-${{ env.OPENSSL_VERSION }}/*
         7z a ../openssl-Windows-static-${{ env.OPENSSL_VERSION }}.zip ./openssl-Windows-static-${{ env.OPENSSL_VERSION }}/*
 
     - name: Create-Release
@@ -148,20 +154,26 @@ jobs:
         echo "- ${CUSTOM_CRYPTO_NAME}_x86_64.lib" >> RELEASE_NOTE.md
         echo "- ${CUSTOM_SSL_NAME}_x86.lib" >> RELEASE_NOTE.md
         echo "- ${CUSTOM_SSL_NAME}_x86_64.lib" >> RELEASE_NOTE.md
-        echo "#### Linux" >> RELEASE_NOTE.md
+        echo "#### Ubuntu 22.04" >> RELEASE_NOTE.md
+        echo "- ${CUSTOM_CRYPTO_NAME}_x86.a" >> RELEASE_NOTE.md
+        echo "- ${CUSTOM_CRYPTO_NAME}_x86_64.a" >> RELEASE_NOTE.md
+        echo "- ${CUSTOM_SSL_NAME}_x86.a" >> RELEASE_NOTE.md
+        echo "- ${CUSTOM_SSL_NAME}_x86_64.a" >> RELEASE_NOTE.md
+        echo "#### Ubuntu latest" >> RELEASE_NOTE.md
         echo "- ${CUSTOM_CRYPTO_NAME}_x86.a" >> RELEASE_NOTE.md
         echo "- ${CUSTOM_CRYPTO_NAME}_x86_64.a" >> RELEASE_NOTE.md
         echo "- ${CUSTOM_SSL_NAME}_x86.a" >> RELEASE_NOTE.md
         echo "- ${CUSTOM_SSL_NAME}_x86_64.a" >> RELEASE_NOTE.md
 
     - name: Update Release
-      uses: softprops/action-gh-release@v2
+      uses: softprops/action-gh-release@v3
       with:
         tag_name: openssl-${{ env.OPENSSL_VERSION }}-${{ github.run_number }}
         name: OpenSSL ${{ env.OPENSSL_VERSION }} (Build ${{ github.run_number }})
         body_path: RELEASE_NOTE.md
         files: |
-          openssl-Linux-static-${{ env.OPENSSL_VERSION }}.zip
+          openssl-Ubuntu-22.04-static-${{ env.OPENSSL_VERSION }}.zip
+          openssl-Ubuntu-latest-static-${{ env.OPENSSL_VERSION }}.zip
           openssl-Windows-static-${{ env.OPENSSL_VERSION }}.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
